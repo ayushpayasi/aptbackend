@@ -94,10 +94,11 @@ app.post("/storeReport",async (req,res)=>{
             req.body["testId"],
             req.body["reportBase64"]
         ])
-    console.log(result)
-    res.status(200).send("test")
+    // console.log(result)
+    res.status(200).send("successful")
     }catch(e){
         console.log(e);
+        res.status(400).send("failed")
     }
 })
 
