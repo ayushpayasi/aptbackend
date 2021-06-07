@@ -4,9 +4,12 @@ const cors = require("cors")
 const axios = require("axios")
 const nodemailer = require("nodemailer")
 
+
 const app = express()
+
 app.use(express.json());
 app.use(cors())
+
 
 const client = new Client({
     user: 'ayushpayasi',
@@ -18,13 +21,14 @@ const client = new Client({
 
 client.connect()
 
+
 var transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
            user: 'ayushpayasi@gmail.com',
            pass: 'MH34k2909'
-       }
-   });
+       }}
+)
 
 const checks = {
     userExists : async (contact)=>{
@@ -84,6 +88,7 @@ const liveHealthApiRequest ={
     },
 }
 
+
 const localDatabaseRequest ={
     createNewUser: async (body)=>{
         try{
@@ -121,6 +126,7 @@ const localDatabaseRequest ={
 
 }
 
+
 app.post("/userCheck",async (req,res)=>{
     if (await checks.userExists(req.body["mobile"])){
         res.send("exists").status(200)
@@ -132,13 +138,15 @@ app.post("/userCheck",async (req,res)=>{
 })
 
 app.post("/createNewUser",async (req,res)=>{
-    if (await localDatabaseRequest.createNewUser(req.body)){
+    console.log(req.body)
+    // if (await localDatabaseRequest.createNewUser(req.body)){
         res.send("new User Creted").status(201)
-    }
-    else{
-        res.send("failed to create new user").status(500)
-    }
+    // }
+    // else{
+        // res.send("failed to create new user").status(500)
+    // }
 })
+
 
 // unchecked
 app.post("/updateUser",async (req,res)=>{
@@ -200,9 +208,34 @@ app.get("/priceList",async (req,res)=>{
     const response = await axios.get("https://staging.livehealth.solutions/getAllTestsAndProfiles/?token=a6277e50-bc7d-11eb-aed7-0afba0d18fd2")
     const coupon = req.query.coupon
     switch (coupon) {
-        case "SENIOR" :
-            res.json([{code:200},response.data["testList"]])
+        case "AYUSH":
+            let test = []
+            response.data["testList"].forEach(item=>{
+                let temp = item 
+                temp.testAmount = parseFloat(item.testAmount) - (parseFloat(item.testAmount) *0.2)
+                test.push(temp)
+            })
+            res.json([{code:200},test])
             break;
+        
+        case "ANCHIT":
+            let test2 = []
+            response.data["testList"].forEach(item=>{
+                let temp = item 
+                temp.testAmount = parseFloat(item.testAmount) - (parseFloat(item.testAmount) *0.5)
+                test2.push(temp)
+            })
+            res.json([{code:200},test2])
+            break;
+
+        case "4664684" :
+            response.data["profileTestList"].forEach(item=>{
+                if(item.testID == 4664684){
+                    res.json([{code:200},item["testList"]])
+                }
+                })
+            res.send(400)
+        break;
         case "GYMFREAK" :
             res.json([{code:200},response.data["testList"]])
             break;
@@ -275,12 +308,6 @@ app.post("/login",async (req,res)=>{
 
 
 
-// app.use()
-
-
-
-
-
 app.post("/storeBill",(req,res)=>{
     console.log(req.body)
     res.json({"code":200})
@@ -321,6 +348,61 @@ app.get("/getReport",async(req,res)=>{
     }
 })
 
+
+
+// admin panel
+app.get("/admin/getPackage",async (req,res)=>{
+    const result = await client.query(`SELECT * FROM "aptpackages" WHERE type = $1`,[req.query.type])
+    res.json(result.rows)
+})
+
+app.post("/admin/postPackage",async (req,res)=>{
+    const result = await client.query(`INSERT INTO "aptpackages" ("type","name","description","packagePrice","testsIncluded","preRequisites","idealFor") VALUES ($1,$2,$3,$4,$5,$6,$7)`,["pregnancy","fifth","test description","3000",["ayush payasi","ayush2"],["enjoy","enjoy 2"],["check"]])
+    console.log(result)
+    res.send(200)
+})
+
+app.get("/admin/getTests",async (req,res)=>{
+    try{
+    const response = await client.query("SELECT * FROM apttests")
+    console.log(response.rows)
+    res.send("worked").status(200)
+    }
+    catch (err){
+        console.log(err)
+        res.send("failed").status(500)
+    }
+})
+
+app.post("/admin/uploadTest",async (req,res)=>{
+    try{
+    const response = await client.query(`INSERT INTO "apttests" VALUES ($1,$2,$3,$4,$5,$6)`,[
+        req.body["testId"],
+        req.body["name"],
+        req.body["description"],
+        req.body["details"],
+        req.body["imageLink"],
+        req.body["sampleReportImage"],
+        req.body["price"],
+        req.body["faq"],
+        
+    ])
+    console.log(response.rows)
+    res.send("worked").status(200)
+    }
+    catch (err){
+        console.log(err)
+        res.send("failed").status(500)
+    }
+})
+
+
+
+
+
 app.listen(process.env.PORT || 5000,()=>{
     console.log(process.env.PORT || 5000)
 })
+
+
+
