@@ -351,15 +351,105 @@ app.get("/getReport",async(req,res)=>{
 
 
 // admin panel
-app.get("/admin/getPackage",async (req,res)=>{
+
+app.get("/admin/dialogueBoxCheck",async (req,res)=>{
+try{
+    const result = await client.query(`SELECT * FROM "aptpackages" WHERE "packageId" = $1`,[req.query.Id])
+    if(result.rows.length === 0){
+        const packageList = await axios.get(`https://staging.livehealth.solutions/getAllTestsAndProfiles/?token=a6277e50-bc7d-11eb-aed7-0afba0d18fd2`)
+        const tempDict = await packageList.data.profileTestList.filter(item=>item.testID == req.query.Id)
+        if(tempDict.length === 0){
+            res.json({status:400,body:[]})       
+        }
+        else{
+        let finalDict = {
+        "type" : tempDict[0].testCategory,
+        "name" : tempDict[0].testName,
+        "description" : "",
+        "packagePrice":tempDict[0].testAmount,
+        "testsIncluded": tempDict[0].testList.map(item=>item.testName),
+        "preRequisites":[],
+        "idealFor":[],
+        "packageId":tempDict[0].testID,
+        "isSpecial":false
+    }
+    res.json({status:200,body:finalDict})
+    }
+    }
+    else{
+        res.json({status:200,body:result.rows[0]})
+    }
+}
+catch(e){
+    console.log(e)
+    res.json({status:500})
+}
+
+})
+
+app.get("/admin/getPackageByType",async (req,res)=>{
     const result = await client.query(`SELECT * FROM "aptpackages" WHERE type = $1`,[req.query.type])
+    console.log(result.rows)
     res.json(result.rows)
 })
 
+app.get("/admin/getPackageById",async (req,res)=>{
+    console.log(req.query)
+    const result = await client.query(`SELECT * FROM "aptpackages" WHERE "packageId" = $1`,[req.query.Id])
+    res.json(result.rows)
+})
+
+app.get("/admin/getAllPackage",async (req,res)=>{
+    try{
+    const result = await client.query(`SELECT * FROM "aptpackages"  ORDER BY "packageId"`)
+    console.log(result.rows)
+    res.json(result.rows)
+    }
+    catch(e){
+        res.send("Internal Server Error").status(500)
+    }
+})
+
 app.post("/admin/postPackage",async (req,res)=>{
-    const result = await client.query(`INSERT INTO "aptpackages" ("type","name","description","packagePrice","testsIncluded","preRequisites","idealFor") VALUES ($1,$2,$3,$4,$5,$6,$7)`,["pregnancy","fifth","test description","3000",["ayush payasi","ayush2"],["enjoy","enjoy 2"],["check"]])
-    console.log(result)
+    try{
+    console.log(req.body)
+    const check =  await client.query(`SELECT * FROM "aptpackages" WHERE "packageId" = $1`,[req.body.packageId])
+    if(check.rows.length <1){
+        console.log("insert")
+        const result = await client.query(`INSERT INTO "aptpackages" ("packageId","type","name","description","packagePrice","testsIncluded","preRequisites","idealFor","isSpecial") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[
+            req.body.packageId,
+            req.body.type,
+            req.body.name,
+            req.body.description,
+            req.body.packagePrice,
+            req.body.testsIncluded,
+            req.body.preRequisites,
+            req.body.idealFor,
+            req.body.isSpecial
+        ])    
+        console.log(result)
+    }
+    else{
+        const result = await client.query(`UPDATE "aptpackages" SET "packageId" = $1 ,"type" = $2 ,"name" = $3 ,"description" = $4,"packagePrice" = $5 ,"testsIncluded" = $6 ,"preRequisites" = $7 ,"idealFor" = $8, "isSpecial" = $9 WHERE "packageId" = $10`,[
+            req.body.packageId,
+            req.body.type,
+            req.body.name,
+            req.body.description,
+            req.body.packagePrice,
+            req.body.testsIncluded,
+            req.body.preRequisites,
+            req.body.idealFor,
+            req.body.isSpecial,
+            req.body.packageId
+        ])    
+        console.log(result)
+    }
     res.send(200)
+}
+catch(err){
+    console.log(err)
+    res.send(500)
+}
 })
 
 app.get("/admin/getTests",async (req,res)=>{
