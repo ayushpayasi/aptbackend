@@ -3,7 +3,9 @@ const express = require("express")
 const cors = require("cors")
 const axios = require("axios")
 const nodemailer = require("nodemailer")
-
+const multer = require('multer')
+const upload = multer({ dest: 'uploads/' })
+const { uploadFile} = require('./s3')
 
 const app = express()
 
@@ -79,7 +81,6 @@ const liveHealthApiRequest ={
     homeAppointment:async (data)=>{
         try{
             const response = await axios.post("https://staging.livehealth.solutions/LHRegisterBillAPI/a6277e50-bc7d-11eb-aed7-0afba0d18fd2/",data)
-             console.log(response)
              return {code:"200",data:response}
          } 
          catch(err){
@@ -117,7 +118,7 @@ const localDatabaseRequest ={
                 billList.push(body["billId"])
             }
             const response = await client.query(`UPDATE "apttestuser" SET "userName" = ($1), "age" = ($2), "billlist" = ($3) WHERE "contact" = ($4) ;`,[body["fullName"],body["age"],billList,body["mobile"]])
-            console.log(response)
+            
         }
         catch (err){
             console.log(err)
@@ -138,7 +139,6 @@ app.post("/userCheck",async (req,res)=>{
 })
 
 app.post("/createNewUser",async (req,res)=>{
-    console.log(req.body)
     // if (await localDatabaseRequest.createNewUser(req.body)){
         res.send("new User Creted").status(201)
     // }
@@ -167,7 +167,6 @@ try{
     [
         req.body["dob"],req.body["email"],req.body["gender"],req.body["area"],req.body["city"],req.body["pincode"],billList,reportList,appointmentList,req.body["fullName"],req.body["mobile"]
     ])
-    console.log(isUpdated)
 }
 catch(err){
     console.log(err)
@@ -254,10 +253,6 @@ app.post("/check",async (req,res)=>{
         const billList =[]
         const reportList =[]
         const appointmentList = []
-        // const billList = await localDatabaseRequest.getBillList(req.body)
-        // const response = await localDatabaseRequest.updateUserInfo(req.body,billList)
-        // console.log(billList)
-        // res.send("success").status(200)
         
 
     res.send("success").status(200)
@@ -274,7 +269,6 @@ app.post("/bookLabAppointment",async (req,res)=>{
     if(await checkUser(req.body["mobile"])){1
         const result = await liveHealthApiCall.labAppointment(req.body)
         if (result.code === "200"){
-            console.log(result)
             res.code(200)
         }
         else{
@@ -296,7 +290,6 @@ app.post("/bookLabAppointment",async (req,res)=>{
 app.post("/login",async (req,res)=>{
     try{
     const result = await client.query("select * from apttestuser")
-    console.log(result.rows)
     res.status(200).send("success")
     }
     catch(e){
@@ -309,7 +302,6 @@ app.post("/login",async (req,res)=>{
 
 
 app.post("/storeBill",(req,res)=>{
-    console.log(req.body)
     res.json({"code":200})
 })
 
@@ -389,12 +381,10 @@ catch(e){
 
 app.get("/admin/getPackageByType",async (req,res)=>{
     const result = await client.query(`SELECT * FROM "aptpackages" WHERE type = $1`,[req.query.type])
-    console.log(result.rows)
     res.json(result.rows)
 })
 
 app.get("/admin/getPackageById",async (req,res)=>{
-    console.log(req.query)
     const result = await client.query(`SELECT * FROM "aptpackages" WHERE "packageId" = $1`,[req.query.Id])
     res.json(result.rows)
 })
@@ -402,7 +392,7 @@ app.get("/admin/getPackageById",async (req,res)=>{
 app.get("/admin/getAllPackage",async (req,res)=>{
     try{
     const result = await client.query(`SELECT * FROM "aptpackages"  ORDER BY "packageId"`)
-    console.log(result.rows)
+    
     res.json(result.rows)
     }
     catch(e){
@@ -410,39 +400,45 @@ app.get("/admin/getAllPackage",async (req,res)=>{
     }
 })
 
-app.post("/admin/postPackage",async (req,res)=>{
-    try{
-    console.log(req.body)
-    const check =  await client.query(`SELECT * FROM "aptpackages" WHERE "packageId" = $1`,[req.body.packageId])
-    if(check.rows.length <1){
-        console.log("insert")
-        const result = await client.query(`INSERT INTO "aptpackages" ("packageId","type","name","description","packagePrice","testsIncluded","preRequisites","idealFor","isSpecial") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[
-            req.body.packageId,
-            req.body.type,
-            req.body.name,
-            req.body.description,
-            req.body.packagePrice,
-            req.body.testsIncluded,
-            req.body.preRequisites,
-            req.body.idealFor,
-            req.body.isSpecial
-        ])    
-        console.log(result)
+app.post("/admin/postPackage",upload.single('image'),async (req,res)=>{
+    try{    
+    let storeImage = ""
+    if(req.file === undefined){
+        storeImage = req.body.oldImg
     }
     else{
-        const result = await client.query(`UPDATE "aptpackages" SET "packageId" = $1 ,"type" = $2 ,"name" = $3 ,"description" = $4,"packagePrice" = $5 ,"testsIncluded" = $6 ,"preRequisites" = $7 ,"idealFor" = $8, "isSpecial" = $9 WHERE "packageId" = $10`,[
+        const uploadResult = await uploadFile(req.file)
+        storeImage = uploadResult.Location
+    }
+    const check =  await client.query(`SELECT * FROM "aptpackages" WHERE "packageId" = $1`,[req.body.packageId])
+    if(check.rows.length <1){
+        const result = await client.query(`INSERT INTO "aptpackages" ("packageId","type","name","description","packagePrice","testsIncluded","preRequisites","idealFor","isSpecial","image") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[
             req.body.packageId,
             req.body.type,
             req.body.name,
             req.body.description,
             req.body.packagePrice,
-            req.body.testsIncluded,
-            req.body.preRequisites,
-            req.body.idealFor,
+            JSON.parse(req.body.testsIncluded),
+            JSON.parse(req.body.preRequisites),
+            JSON.parse(req.body.idealFor),
             req.body.isSpecial,
+            storeImage
+        ])    
+    }
+    else{
+        const result = await client.query(`UPDATE "aptpackages" SET "packageId" = $1 ,"type" = $2 ,"name" = $3 ,"description" = $4,"packagePrice" = $5 ,"testsIncluded" = $6 ,"preRequisites" = $7 ,"idealFor" = $8, "isSpecial" = $9, "image"= $10 WHERE "packageId" = $11`,[
+            req.body.packageId,
+            req.body.type,
+            req.body.name,
+            req.body.description,
+            req.body.packagePrice,
+            JSON.parse(req.body.testsIncluded),
+            JSON.parse(req.body.preRequisites),
+            JSON.parse(req.body.idealFor),
+            req.body.isSpecial,
+            storeImage,
             req.body.packageId
         ])    
-        console.log(result)
     }
     res.send(200)
 }
@@ -452,10 +448,59 @@ catch(err){
 }
 })
 
+// tests
+
+app.get("/admin/getAllTests", async (req,res)=>{
+    try{
+        const result = await client.query(`SELECT * FROM "apttests"  ORDER BY "testId"`)
+        
+        res.json(result.rows)
+        }
+        catch(e){
+            res.send("Internal Server Error").status(500)
+        }
+})
+
+app.get("/admin/checkAndGetTestById", async (req,res)=>{
+    try{
+        const result = await client.query(`SELECT * FROM "apttests" WHERE "testId" = $1`,[req.query.Id])
+        if(result.rows.length === 0){
+            const testList = await axios.get(`https://staging.livehealth.solutions/getAllTestsAndProfiles/?token=a6277e50-bc7d-11eb-aed7-0afba0d18fd2`)
+            const tempDict = await testList.data.testList.filter(item=>item.testID == req.query.Id)
+            if(tempDict.length === 0){
+                res.json({status:400,body:[]})       
+            }
+            else{
+            let finalDict = {
+            "type" : tempDict[0].testCategory,
+            "name" : tempDict[0].testName,
+            "description":"",
+            "price":tempDict[0].testAmount,
+            "details" : "",
+            "testId":tempDict[0].testID,
+            "isSpecial":false,
+            "imageLink":"",
+            "sampleReportImage":""
+
+        }
+        res.json({status:200,body:finalDict})
+        }
+        }
+        else{
+            res.json({status:200,body:result.rows[0]})
+        }
+    }
+    catch(e){
+        console.log(e)
+        res.json({status:500})
+    }
+    
+})
+
 app.get("/admin/getTests",async (req,res)=>{
     try{
     const response = await client.query("SELECT * FROM apttests")
-    console.log(response.rows)
+    
     res.send("worked").status(200)
     }
     catch (err){
@@ -477,7 +522,6 @@ app.post("/admin/uploadTest",async (req,res)=>{
         req.body["faq"],
         
     ])
-    console.log(response.rows)
     res.send("worked").status(200)
     }
     catch (err){
@@ -486,6 +530,63 @@ app.post("/admin/uploadTest",async (req,res)=>{
     }
 })
 
+const testUpload = upload.fields([{ name: 'testReport', maxCount: 1 }, { name: 'testImage', maxCount: 1 }])
+app.post("/admin/postTest",testUpload, async (req,res)=>{
+    try{
+        let testReport = ""
+        let testImage = ""
+        if(req.files.testReport === undefined){
+            testReport = req.body.oldTestReport
+        }
+        else{
+            const uploadResult = await uploadFile(req.files.testReport[0])
+            testReport = uploadResult.Location
+        }
+        if(req.files.testImage === undefined){
+            testImage = req.body.oldTestImage
+        }
+        else{
+            const uploadResult = await uploadFile(req.files.testImage[0])
+            testImage = uploadResult.Location
+        }
+
+
+        const check =  await client.query(`SELECT * FROM "apttests" WHERE "testId" = $1`,[req.body.testId])
+        if(check.rows.length <1){
+            const result = await client.query(`UPDATE "apttests"("testId","name","description","details","imageLink","sampleReportImage","price","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[
+                req.body.testId,
+                req.body.name,
+                req.body.description,
+                req.body.details,
+                testImage,
+                testReport,
+                req.body.testPrice,
+                req.body.isSpecial,
+                req.body.type,
+            ])    
+        }
+        else{
+            const result = await client.query(`UPDATE "apttests" SET "testId" = $1 ,"name" = $2 ,"description"=$3,"details"=$4,"imageLink"=$5,"sampleReportImage"=$6,"price"=$7,"isSpecial"=$8,"type"=$9 WHERE "testId" = $10`,[
+                req.body.testId,
+                req.body.name,
+                req.body.description,
+                req.body.details,
+                testImage,
+                testReport,
+                req.body.testPrice,
+                req.body.isSpecial,
+                req.body.type,
+                req.body.testId,
+
+            ])    
+        }
+        res.send(200)
+    }
+    catch(err){
+        console.log(err)
+        res.send(500)
+    }
+})
 
 
 
