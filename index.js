@@ -5,7 +5,7 @@ const axios = require("axios")
 const nodemailer = require("nodemailer")
 const multer = require('multer')
 const upload = multer({ dest: 'uploads/' })
-const { uploadFile} = require('./s3')
+const { uploadFile} = require('./s3');
 
 const app = express()
 
@@ -588,6 +588,99 @@ app.post("/admin/postTest",testUpload, async (req,res)=>{
     }
 })
 
+// blogs
+
+app.get("/admin/getAllBlogs", async (req,res)=>{
+    try{
+        const result = await client.query(`SELECT * FROM "aptblogs"  ORDER BY "blogId"`)
+        res.json(result.rows)
+        
+        }
+    catch(e){
+        console.log(e)
+        res.send("Internal Server Error").status(500)
+        }
+})
+
+app.get("/admin/checkAndGetBlogById",async (req,res)=>{
+    try{
+        const result = await client.query(`SELECT * FROM "aptblogs" WHERE "blogId" = $1`,[req.query.Id])
+        if(result.rows.length ==1){
+            res.send(result.rows).status(200)
+        }
+        else{
+            res.send("Invalid Id").status(400)
+        }
+        
+    }
+    catch(err){
+        console.log(err)
+        res.send("Internal Server Error").status(500)
+    }
+
+})
+
+const blogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4},{name:"authorImage" , maxCount:1}])
+app.post("/admin/postBlog",blogUpload, async (req,res)=>{
+    try{
+        let images =[]
+        let videoFile =""
+        let authorImage = ""
+
+        if(req.files !== undefined){
+        if(req.files.images !== undefined){
+            for(var file of req.files.images){
+                const result = await uploadFile(file)
+                images.push(result.Location)
+            }
+        }
+        else{ images = JSON.parse(req.body.imagesLink)}
+        if(req.files.authorImage !== undefined){
+            const result = await uploadFile(req.files.authorImage[0])
+            authorImage = result.Location
+        }
+        else{
+            authorImage = req.body.oldAuthorImage
+        }
+        if(req.files.videoFile !== undefined){
+            const result = await uploadFile(req.files.videoFile[0])
+            videoFile = result.Location
+        }
+        else{
+            videoFile = req.body.oldVideoLink
+        }}
+        const checkExist = await client.query(`SELECT * FROM "aptblogs" WHERE "blogId" = $1`,[req.body.blogId])
+        if(checkExist.rows.length <1){
+            const uploadResult = await client.query(`INSERT INTO "aptblogs" ("author","content","heading","subHeading","authorThumbnail","isVideoBlog","videoLink","imagesLinks") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,[
+                req.body.author,
+                req.body.content,
+                req.body.blogHeading,
+                req.body.blogSubHeading,
+                authorImage,
+                req.body.isVideoBlog,
+                videoFile,
+                images
+            ])
+            res.send(uploadResult.rows[0]).status(200)
+        }
+        else{
+            const uploadResult = await client.query(`INSERT INTO "aptblogs" ("author","content","heading","subHeading","authorThumbnail","isVideoBlog","videoLink","imagesLinks") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,[
+            req.body.author,
+            req.body.content,
+            req.body.blogHeading,
+            req.body.blogSubHeading,
+            authorImage,
+            req.body.isVideoBlog,
+            videoFile,
+            images
+        ])
+        res.send(uploadResult.rows[0]).status(200)
+    }}
+    catch(err){
+        console.log(err)
+        res.send("Internal Server Error").status(500)
+    }
+})
 
 
 
