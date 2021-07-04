@@ -682,6 +682,64 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
     }
 })
 
+//getAllBlogs
+app.get("/allblogs", async(req, res) => {
+    try{
+        const result = await client.query(`SELECT * FROM "aptblogs"  ORDER BY "blogId"`)
+        // console.log(result.rows)
+        if(result.rows.length > 0) {
+            res.status(200).json({
+                status : "Success",
+                data : result.rows
+            })
+        }
+        else {
+            res.status(500).json({
+                status : "fail",
+                message : "Data not found"
+            })
+        }
+        }
+    catch(e){
+        console.log(e)
+        res.send("Internal Server Error").status(500)
+        }
+})
+
+//For Coupons
+app.get("/coupon", async (req,res)=>{
+    try{
+        console.log(req.query.couponCode)
+        const couponCode = parseInt(req.query.couponCode);
+        const verifyCoupon =  await client.query(`SELECT * FROM "aptcoupons" WHERE "couponCode" = $1`,[couponCode])
+        if(verifyCoupon.rows.length > 0) {
+            const {couponPrice, giftedTests} = verifyCoupon.rows[0]
+
+            res.status(200).json({
+                message:"Valid Coupon Code",
+                data : {
+                    couponPrice,
+                    giftedTests
+                }
+            })
+        }
+        else if(verifyCoupon.rows.length === 0){
+            res.status(404).json({
+                message:"Invalid Coupon Code",
+                data : 0
+            })
+        }
+        }
+    catch(err) {
+        console.log(err)
+        res.status(500).json({
+            message : "Internal Error || Server issue",
+            data:0
+        })
+    }
+}
+)
+
 
 
 app.listen(process.env.PORT || 5000,()=>{
