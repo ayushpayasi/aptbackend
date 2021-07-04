@@ -682,6 +682,41 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
     }
 })
 
+//For Coupons
+app.get("/coupon", async (req,res)=>{
+    try{
+        console.log(req.query.couponCode)
+        const couponCode = parseInt(req.query.couponCode);
+        const verifyCoupon =  await client.query(`SELECT * FROM "aptcoupons" WHERE "couponCode" = $1`,[couponCode])
+        if(verifyCoupon.rows.length > 0) {
+            const {couponPrice, giftedTests} = verifyCoupon.rows[0]
+
+            res.status(200).json({
+                message:"Valid Coupon Code",
+                data : {
+                    couponPrice,
+                    giftedTests,
+                    couponCode,
+                }
+            })
+        }
+        else if(verifyCoupon.rows.length === 0){
+            res.status(400).json({
+                message:"Invalid Coupon Code",
+                data : 0
+            })
+        }
+        }
+    catch(err) {
+        console.log(err)
+        res.status(500).json({
+            message : "Internal Error || Server issue",
+            data:0
+        })
+    }
+}
+)
+
 
 
 app.listen(process.env.PORT || 5000,()=>{
