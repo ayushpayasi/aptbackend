@@ -779,6 +779,7 @@ app.post("/admin/insertBlogContent", async (req,res) => {
     catch(err) {
         console.log(err)
         res.send("Internal Server Error").status(500)
+        console.log("")
     }
 })
 
