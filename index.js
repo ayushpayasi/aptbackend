@@ -620,8 +620,83 @@ app.get("/admin/checkAndGetBlogById",async (req,res)=>{
 
 })
 
-const blogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4},{name:"authorImage" , maxCount:1}])
+//Admin - Update Blog
+const blogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4}])
 app.post("/admin/postBlog",blogUpload, async (req,res)=>{
+
+    try{
+        let images =[]
+        let videoFile =""
+        let authorImage = ""
+
+        // console.log(req.files)
+        // console.log(req.body)
+        if(req.files !== undefined) {
+            
+            if(req.files.images !== undefined){
+                for(var file of req.files.images){
+                    const result = await uploadFile(file)
+                    images.push(result.Location)
+                }
+            }
+            else{ images = JSON.parse(req.body.imagesLink)}
+            if(req.files.authorImage !== undefined){
+                const result = await uploadFile(req.files.authorImage[0])
+                authorImage = result.Location
+            }
+            else{
+                authorImage = req.body.oldAuthorImage
+            }
+            if(req.files.videoFile !== undefined){
+                const result = await uploadFile(req.files.videoFile[0])
+                videoFile = result.Location
+            }
+            else{
+                videoFile = req.body.oldVideoLink
+            }
+        }
+        const checkExist = await client.query(`SELECT * FROM "aptblogs" WHERE "blogId" = $1`,[req.body.blogId])
+        // console.log(checkExist)
+        if(checkExist.rows.length > 0){
+            const uploadResult = await client.query(`UPDATE "aptblogs" SET "author" = $1, "content" = $2, "heading" = $3, "subHeading" = $4, "authorThumbnail" = $5, "isVideoBlog" = $6, "videoLink" = $7, "imagesLinks" = $8 where "blogId" = $9 returning *`,[
+                req.body.author,
+                req.body.content,
+                req.body.blogHeading,
+                req.body.blogSubHeading,
+                authorImage,
+                req.body.isVideoBlog,
+                videoFile,
+                images,
+                req.body.blogId
+            ])
+            console.log(uploadResult.rows[0])
+            res.send(uploadResult.rows[0]).status(200)
+        }
+        else{
+            const uploadResult = await client.query(`UPDATE "aptblogs" SET "author" = $1, "content" = $2, "heading" = $3, "subHeading" = $4, "authorThumbnail" = $5, "isVideoBlog" = $6, "videoLink" = $7, "imagesLinks" = $8 where "blogId" = $9 returning *`,[
+            req.body.author,
+            req.body.content,
+            req.body.blogHeading,
+            req.body.blogSubHeading,
+            authorImage,
+            req.body.isVideoBlog,
+            videoFile,
+            images,
+            req.body.blogId
+        ])
+        console.log(uploadResult.rows[0])
+        res.send(uploadResult.rows[0]).status(200)
+    }}
+    catch(err){
+        console.log(err)
+        res.send("Internal Server Error").status(500)
+    }
+})
+
+
+//Admin- Add blog
+const insertBlogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4}])
+app.post("/admin/insertBlog",insertBlogUpload, async (req,res)=>{
     try{
         let images =[]
         let videoFile =""
@@ -634,37 +709,22 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
                 images.push(result.Location)
             }
         }
-        else{ images = JSON.parse(req.body.imagesLink)}
+        else{ images = null}
         if(req.files.authorImage !== undefined){
             const result = await uploadFile(req.files.authorImage[0])
             authorImage = result.Location
         }
         else{
-            authorImage = req.body.oldAuthorImage
+            authorImage = null
         }
         if(req.files.videoFile !== undefined){
             const result = await uploadFile(req.files.videoFile[0])
             videoFile = result.Location
         }
         else{
-            videoFile = req.body.oldVideoLink
+            videoFile = null
         }}
-        const checkExist = await client.query(`SELECT * FROM "aptblogs" WHERE "blogId" = $1`,[req.body.blogId])
-        if(checkExist.rows.length <1){
-            const uploadResult = await client.query(`INSERT INTO "aptblogs" ("author","content","heading","subHeading","authorThumbnail","isVideoBlog","videoLink","imagesLinks") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,[
-                req.body.author,
-                req.body.content,
-                req.body.blogHeading,
-                req.body.blogSubHeading,
-                authorImage,
-                req.body.isVideoBlog,
-                videoFile,
-                images
-            ])
-            res.send(uploadResult.rows[0]).status(200)
-        }
-        else{
-            const uploadResult = await client.query(`INSERT INTO "aptblogs" ("author","content","heading","subHeading","authorThumbnail","isVideoBlog","videoLink","imagesLinks") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,[
+        const insertResult = await client.query(`INSERT INTO "aptblogs" ("author","content","heading","subHeading","authorThumbnail","isVideoBlog","videoLink","imagesLinks") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,[
             req.body.author,
             req.body.content,
             req.body.blogHeading,
@@ -674,9 +734,49 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
             videoFile,
             images
         ])
-        res.send(uploadResult.rows[0]).status(200)
-    }}
+        console.log(insertResult)
+        res.send(insertResult.rows[0]).status(200)
+        }
     catch(err){
+        console.log(err)
+        res.send("Internal Server Error").status(500)
+    }
+})
+
+
+app.post("/admin/uploadTest",async (req,res)=>{
+    try{
+    const response = await client.query(`INSERT INTO "apttests" VALUES ($1,$2,$3,$4,$5,$6)`,[
+        req.body["testId"],
+        req.body["name"],
+        req.body["description"],
+        req.body["details"],
+        req.body["imageLink"],
+        req.body["sampleReportImage"],
+        req.body["price"],
+        req.body["faq"],
+        
+    ])
+    res.send("worked").status(200)
+    }
+    catch (err){
+        console.log(err)
+        res.send("failed").status(500)
+    }
+})
+//Admin - insertBlogContent
+app.post("/admin/insertBlogContent", async (req,res) => {
+    console.log("done")
+    try {
+        console.log(req.body)
+        const uploadResult = await client.query(`UPDATE "aptblogs" SET "content" = $1 where "blogId" = $2 returning *`,[
+            req.body.insertContentData,
+            req.body.blogId
+        ])
+        
+        res.status(200).json({status : "success"})
+    }
+    catch(err) {
         console.log(err)
         res.send("Internal Server Error").status(500)
     }
