@@ -553,7 +553,7 @@ app.post("/admin/postTest",testUpload, async (req,res)=>{
 
         const check =  await client.query(`SELECT * FROM "apttests" WHERE "testId" = $1`,[req.body.testId])
         if(check.rows.length <1){
-            const result = await client.query(`UPDATE "apttests"("testId","name","description","details","imageLink","sampleReportImage","price","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[
+            const result = await client.query(`UPDATE "apttests"("testId","name","description","details","imageLink","sampleReportImage","price","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,[
                 req.body.testId,
                 req.body.name,
                 req.body.description,
@@ -563,7 +563,8 @@ app.post("/admin/postTest",testUpload, async (req,res)=>{
                 req.body.testPrice,
                 req.body.isSpecial,
                 req.body.type,
-            ])    
+            ])  
+            
         }
         else{
             const result = await client.query(`UPDATE "apttests" SET "testId" = $1 ,"name" = $2 ,"description"=$3,"details"=$4,"imageLink"=$5,"sampleReportImage"=$6,"price"=$7,"isSpecial"=$8,"type"=$9 WHERE "testId" = $10`,[
@@ -620,12 +621,13 @@ app.get("/admin/checkAndGetBlogById",async (req,res)=>{
 
 })
 
-const blogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4},{name:"authorImage" , maxCount:1}])
+const blogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4}])
 app.post("/admin/postBlog",blogUpload, async (req,res)=>{
+    console.log(req.files)
+
     try{
         let images =[]
         let videoFile =""
-        let authorImage = ""
 
         if(req.files !== undefined){
         if(req.files.images !== undefined){
@@ -635,13 +637,7 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
             }
         }
         else{ images = JSON.parse(req.body.imagesLink)}
-        if(req.files.authorImage !== undefined){
-            const result = await uploadFile(req.files.authorImage[0])
-            authorImage = result.Location
-        }
-        else{
-            authorImage = req.body.oldAuthorImage
-        }
+        
         if(req.files.videoFile !== undefined){
             const result = await uploadFile(req.files.videoFile[0])
             videoFile = result.Location
@@ -649,6 +645,8 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
         else{
             videoFile = req.body.oldVideoLink
         }}
+        
+
         const checkExist = await client.query(`SELECT * FROM "aptblogs" WHERE "blogId" = $1`,[req.body.blogId])
         if(checkExist.rows.length <1){
             const uploadResult = await client.query(`INSERT INTO "aptblogs" ("author","content","heading","subHeading","authorThumbnail","isVideoBlog","videoLink","imagesLinks") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,[
