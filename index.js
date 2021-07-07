@@ -819,12 +819,13 @@ app.get("/coupon", async (req,res)=>{
                 message:"Valid Coupon Code",
                 data : {
                     couponPrice,
-                    giftedTests
+                    giftedTests,
+                    couponCode,
                 }
             })
         }
         else if(verifyCoupon.rows.length === 0){
-            res.status(404).json({
+            res.status(400).json({
                 message:"Invalid Coupon Code",
                 data : 0
             })
