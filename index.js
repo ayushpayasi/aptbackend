@@ -903,6 +903,21 @@ app.get("/getCovidTests", async(req,res)=>{
 })
 
 
+//Slot Booking --- Section
+
+app.get("/slotBooking",async(req,res) => {
+
+  try{
+    const result = await client.query(`SELECT * FROM "aptSlots" WHERE "slotId" = $1`,[req.query.Id])
+    if(result.status()===200){
+      console.log("Success")
+    }
+  }catch(err){
+    console.log("Failed")
+  }
+}) //652
+
+
 
 app.listen(process.env.PORT || 5000,()=>{
     console.log(process.env.PORT || 5000)
