@@ -426,7 +426,7 @@ app.get("/admin/getAllPackage", async (req, res) => {
       `SELECT * FROM "aptpackages"  ORDER BY "packageId"`
     );
 
-    res.json(result.rows);
+    res.status(200).json(result.rows);
   } catch (e) {
     res.send("Internal Server Error").status(500);
   }
@@ -598,7 +598,7 @@ app.post("/admin/postTest", testUpload, async (req, res) => {
     );
     if (check.rows.length < 1) {
       const result = await client.query(
-        `UPDATE "apttests"("testId","name","description","details","imageLink","sampleReportImage","price","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `INSERT INTO "apttests" ("testId","name","description","details","imageLink","sampleReportImage","price","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [
           req.body.testId,
           req.body.name,
@@ -887,6 +887,20 @@ app.get("/coupon", async (req,res)=>{
     }
 }
 )
+
+// index Page
+
+app.get("/getCovidTests", async(req,res)=>{
+  try{
+    const response = await client.query(`SELECT * FROM "apttests"  WHERE "isSpecial" = true AND "type" = 'Other Services'`)
+    const data = response.rows
+    res.send({code:200,data}).status(200)
+  }
+  catch(e){
+    console.log(e)
+    res.send().status(500)
+  }
+})
 
 
 
