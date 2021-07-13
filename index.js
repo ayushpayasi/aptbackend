@@ -6,11 +6,31 @@ const nodemailer = require("nodemailer");
 const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
 const { uploadFile } = require("./s3");
+const sgMail = require('@sendgrid/mail');
+
+
 
 const app = express();
 
 app.use(express.json());
 app.use(cors());
+sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+
+
+// mail client
+const sendMail = async (message)=>{
+  const msg = {
+    to: 'ayushpayasi@gmail.com', // Change to your recipient
+    from: 'anchitkumar100@gmail.com', // Change to your verified sender
+    subject: 'Sending with SendGrid is Fun',
+    text: 'and easy to do anywhere, even with Node.js',
+    html: '<strong>and easy to do anywhere, even with Node.js</strong>',
+  }
+
+  sgMail.send(msg).then(() => {console.log('Email sent')}).catch((error) => {console.error(error)})
+
+}
+
 
 const client = new Client({
   user: "ayushpayasi",
@@ -902,20 +922,166 @@ app.get("/getCovidTests", async(req,res)=>{
   }
 })
 
+app.get("/getPackages", async(req,res)=>{
+  try{
+    const response = await client.query(`SELECT * FROM "aptpackages"  WHERE "isSpecial" = 'true' `)
+    const data = response.rows
+    res.send({code:200,data}).status(200)
+  }
+  catch(e){
+    console.log(e)
+    res.send().status(500)
+  }
+})
+
+
 
 //Slot Booking --- Section
 
-app.get("/slotBooking",async(req,res) => {
-
+app.post("/slotBooking",async(req,res) => {
+  console.log(req.body.slot)
   try{
-    const result = await client.query(`SELECT * FROM "aptSlots" WHERE "slotId" = $1`,[req.query.Id])
-    if(result.status()===200){
-      console.log("Success")
+    const result = await client.query(`SELECT * FROM "aptbookings" WHERE "slot"::DATE = $1`,[req.body.slot])
+    var decryptSlot = {7:"slot1",8:"slot2",9:"slot3",10:"slot4",11:"slot5",12:"slot6",13:"slot7",14:"slot8",15:"slot9",16:"slot10",17:"slot11",18:"slot12",19:"slot13",20:"slot14",21:"slot15"}
+    var slots = {slot1:0,slot2:0,slot3:0,slot4:0,slot5:0,slot6:0,slot7:0,slot8:0,slot9:0,slot10:0,slot11:0,slot12:0,slot13:0,slot14:0,slot15:0}
+    for (var a of result.rows){
+      slots[decryptSlot[new Date(a.slot).getUTCHours()]]++
+    }
+    res.json(slots).sendStatus(200)
+  }catch(err){
+    console.log(err)
+    res.sendStatus(500)
+  }
+})
+
+
+// manage flebo
+
+app.get("/getFlebo",async (req,res)=>{
+  try{
+    const result = await client.query(`SELECT * FROM "aptutils"`)
+    res.status(200).json(result.rows[0])
+  }
+  catch(err){
+    console.log(err)
+    res.status(500)
+  }
+})
+
+app.post("/setFlebo",async (req,res)=>{
+  try{
+    const result = await client.query(`UPDATE "aptutils" SET "flebo" = $1 WHERE "flebo" = $2 `,[req.body.newFlebo,req.body.currFlebo])
+    res.sendStatus(200)
+  }
+  catch(err){
+    console.log(err)
+    res.sendStatus(500)
+  }
+})
+
+
+// admin - fetch subscribers email
+app.get("/admin/getSubscribers",async(req,res)=>{
+  try{
+    const result = await client.query(`SELECT * FROM "aptsubscribers"`)
+    if(result.rows.length > 0 ){
+      res.json(result.rows).status(200)
+    }
+    else{
+      res.json({"data":"nodata"}).status(400)
     }
   }catch(err){
-    console.log("Failed")
+    console.log(err)
+    res.status(500)
   }
-}) //652
+}) 
+
+// admin - fetch users email
+app.get("/admin/fetchUserList",async(req,res)=>{
+  try{
+    const result = await client.query(`SELECT "userName" , "email" FROM "apttestuser"`)
+    if(result.rows.length > 0){
+      res.json(result.rows).status(200)
+    }else{
+      res.json({"data":"nodata"}).status(400)
+    }
+  }catch(err){
+    console.log(err)
+    res.status(500)
+  }
+}) 
+
+
+// post feedback/complaint
+
+app.post("/postFeedback",upload.single("attachment"),async(req,res)=>{
+  try{  
+    console.log(req.body)
+  let attachment = "";
+  if (req.file === undefined) {
+    attachment = "";
+  } else {
+    const uploadResult = await uploadFile(req.file);
+    attachment = uploadResult.Location;
+  }
+  console.log("here")
+    const result = await client.query(`INSERT INTO "aptquery" VALUES ($1,$2,$3,$4,$5,$6)`,[req.body.name,req.body.email,req.body.type,req.body.contact,req.body.query,attachment])
+      res.send("worked").status(200)
+  }catch(err){
+    console.log(err)
+    res.status(500)
+  }
+}) 
+
+// post contactus
+app.post("/postContactus",async(req,res)=>{
+  try{  
+    console.log(req.body)
+    const result = await client.query(`INSERT INTO "aptcontactus" VALUES ($1,$2,$3,$4,$5)`,[req.body.name,req.body.email,req.body.contact,req.body.queryType,req.body.queryDescription])
+      res.send("worked").status(200)
+  }catch(err){
+    console.log(err)
+    res.status(500)
+  }
+}) 
+
+// fetchFeedbacks
+app.get("/admin/fetchFeedbacks",async(req,res)=>{
+  try{
+    const result = await client.query(`SELECT * FROM "aptquery"`)
+    if(result.rows.length > 0){
+      res.json({data:result.rows}).status(200)
+    }
+    else{
+      res.josn({data:"no data"}).status(400)
+    }
+  }
+  catch(err){
+    console.log(err)
+    res.send("failed").status(500)
+  }
+
+})
+
+// fetch Contactus
+app.get("/admin/fetchContactus",async(req,res)=>{
+  try{
+    const result = await client.query(`SELECT * FROM "aptcontactus"`)
+    if(result.rows.length > 0){
+      res.json({data:result.rows}).status(200)
+    }
+    else{
+      res.josn({data:"no data"}).status(400)
+    }
+  }
+  catch(err){
+    console.log(err)
+    res.send("failed").status(500)
+  }
+
+})
+
+
 
 
 
