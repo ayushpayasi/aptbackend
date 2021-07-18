@@ -19,8 +19,8 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 // mail client
 const sendMail = async (message)=>{
   const msg = {
-    to: 'ayushpayasi@gmail.com', // Change to your recipient
-    from: 'anchitkumar100@gmail.com', // Change to your verified sender
+    to: 'anchitkumar100@gmail.com', // Change to your recipient
+    from: 'info@aptdiagnostics.com', // Change to your verified sender
     subject: 'Sending with SendGrid is Fun',
     text: 'and easy to do anywhere, even with Node.js',
     html: '<strong>and easy to do anywhere, even with Node.js</strong>',
@@ -65,12 +65,12 @@ const checks = {
 };
 
 const communication = {
-  sendReportsMail: async (to, name) => {
+  sendReportsMail: async (to, testName) => {
     const mailOptions = {
       from: "ayushpayasi@gmail.com",
       to: `${to}`,
-      subject: `Welcome to APT Diagnostics ${name}`,
-      html: `<p>Welcome ${name}</p>`,
+      subject: `Welcome to APT Diagnostics ${testName}`,
+      html: `<p>Welcome ${testName}</p>`,
     };
 
     await transporter.sendMail(mailOptions, (err, info) => {
@@ -78,7 +78,7 @@ const communication = {
       else console.log(info);
     });
   },
-  sendOTP: async (to, name) => {},
+  sendOTP: async (to, testName) => {},
 };
 
 const liveHealthApiRequest = {
@@ -204,7 +204,7 @@ app.post("/updateUser", async (req, res) => {
 app.post("/createAppointment/lab", async (req, res) => {
   const localSaveBody = {
     contact: req.body["mobile"],
-    name: req.body["fullName"],
+    testName: req.body["fullName"],
     email: req.body["email"],
     age: req.body["age"],
     gender: req.body["gender"],
@@ -341,7 +341,7 @@ app.post("/storeReport", async (req, res) => {
         req.body["Patient Id"],
         req.body["labReportId"],
         req.body["Contact No"],
-        req.body["testId"],
+        req.body["testID"],
         req.body["reportBase64"],
       ]
     );
@@ -388,7 +388,7 @@ app.get("/getAllBlogs", async (req, res) => {
 app.get("/admin/dialogueBoxCheck", async (req, res) => {
   try {
     const result = await client.query(
-      `SELECT * FROM "aptpackages" WHERE "packageId" = $1`,
+      `SELECT * FROM "aptpackages" WHERE "testID" = $1`,
       [req.query.Id]
     );
     if (result.rows.length === 0) {
@@ -401,15 +401,16 @@ app.get("/admin/dialogueBoxCheck", async (req, res) => {
       if (tempDict.length === 0) {
         res.json({ status: 400, body: [] });
       } else {
+        console.log(tempDict[0].integrationCode)
         let finalDict = {
-          type: tempDict[0].testCategory,
-          name: tempDict[0].testName,
+          type: tempDict[0].integrationCode,
+          testName: tempDict[0].testName,
           description: "",
-          packagePrice: tempDict[0].testAmount,
+          testAmount: tempDict[0].testAmount,
           testsIncluded: tempDict[0].testList.map((item) => item.testName),
           preRequisites: [],
           idealFor: [],
-          packageId: tempDict[0].testID,
+          testID: tempDict[0].testID,
           isSpecial: false,
         };
         res.json({ status: 200, body: finalDict });
@@ -433,7 +434,7 @@ app.get("/admin/getPackageByType", async (req, res) => {
 
 app.get("/admin/getPackageById", async (req, res) => {
   const result = await client.query(
-    `SELECT * FROM "aptpackages" WHERE "packageId" = $1`,
+    `SELECT * FROM "aptpackages" WHERE "testID" = $1`,
     [req.query.Id]
   );
   res.json(result.rows);
@@ -442,7 +443,7 @@ app.get("/admin/getPackageById", async (req, res) => {
 app.get("/admin/getAllPackage", async (req, res) => {
   try {
     const result = await client.query(
-      `SELECT * FROM "aptpackages"  ORDER BY "packageId"`
+      `SELECT * FROM "aptpackages"  ORDER BY "testID"`
     );
 
     res.status(200).json(result.rows);
@@ -461,18 +462,18 @@ app.post("/admin/postPackage", upload.single("image"), async (req, res) => {
       storeImage = uploadResult.Location;
     }
     const check = await client.query(
-      `SELECT * FROM "aptpackages" WHERE "packageId" = $1`,
-      [req.body.packageId]
+      `SELECT * FROM "aptpackages" WHERE "testID" = $1`,
+      [req.body.testID]
     );
     if (check.rows.length < 1) {
       const result = await client.query(
-        `INSERT INTO "aptpackages" ("packageId","type","name","description","packagePrice","testsIncluded","preRequisites","idealFor","isSpecial","image") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        `INSERT INTO "aptpackages" ("testID","type","testName","description","testAmount","testsIncluded","preRequisites","idealFor","isSpecial","image") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [
-          req.body.packageId,
+          req.body.testID,
           req.body.type,
-          req.body.name,
+          req.body.testName,
           req.body.description,
-          req.body.packagePrice,
+          req.body.testAmount,
           JSON.parse(req.body.testsIncluded),
           JSON.parse(req.body.preRequisites),
           JSON.parse(req.body.idealFor),
@@ -482,19 +483,19 @@ app.post("/admin/postPackage", upload.single("image"), async (req, res) => {
       );
     } else {
       const result = await client.query(
-        `UPDATE "aptpackages" SET "packageId" = $1 ,"type" = $2 ,"name" = $3 ,"description" = $4,"packagePrice" = $5 ,"testsIncluded" = $6 ,"preRequisites" = $7 ,"idealFor" = $8, "isSpecial" = $9, "image"= $10 WHERE "packageId" = $11`,
+        `UPDATE "aptpackages" SET "testID" = $1 ,"type" = $2 ,"testName" = $3 ,"description" = $4,"testAmount" = $5 ,"testsIncluded" = $6 ,"preRequisites" = $7 ,"idealFor" = $8, "isSpecial" = $9, "image"= $10 WHERE "testID" = $11`,
         [
-          req.body.packageId,
+          req.body.testID,
           req.body.type,
-          req.body.name,
+          req.body.testName,
           req.body.description,
-          req.body.packagePrice,
+          req.body.testAmount,
           JSON.parse(req.body.testsIncluded),
           JSON.parse(req.body.preRequisites),
           JSON.parse(req.body.idealFor),
           req.body.isSpecial,
           storeImage,
-          req.body.packageId,
+          req.body.testID,
         ]
       );
     }
@@ -510,7 +511,7 @@ app.post("/admin/postPackage", upload.single("image"), async (req, res) => {
 app.get("/admin/getAllTests", async (req, res) => {
   try {
     const result = await client.query(
-      `SELECT * FROM "apttests"  ORDER BY "testId"`
+      `SELECT * FROM "apttests"  ORDER BY "testID"`
     );
 
     res.json(result.rows);
@@ -522,7 +523,7 @@ app.get("/admin/getAllTests", async (req, res) => {
 app.get("/admin/checkAndGetTestById", async (req, res) => {
   try {
     const result = await client.query(
-      `SELECT * FROM "apttests" WHERE "testId" = $1`,
+      `SELECT * FROM "apttests" WHERE "testID" = $1`,
       [req.query.Id]
     );
     if (result.rows.length === 0) {
@@ -536,12 +537,12 @@ app.get("/admin/checkAndGetTestById", async (req, res) => {
         res.json({ status: 400, body: [] });
       } else {
         let finalDict = {
-          type: tempDict[0].testCategory,
-          name: tempDict[0].testName,
+          type: tempDict[0].integrationCode,
+          testName: tempDict[0].testName,
           description: "",
-          price: tempDict[0].testAmount,
+          testAmount: tempDict[0].testAmount,
           details: "",
-          testId: tempDict[0].testID,
+          testID: tempDict[0].testID,
           isSpecial: false,
           imageLink: "",
           sampleReportImage: "",
@@ -573,13 +574,13 @@ app.post("/admin/uploadTest", async (req, res) => {
     const response = await client.query(
       `INSERT INTO "apttests" VALUES ($1,$2,$3,$4,$5,$6)`,
       [
-        req.body["testId"],
-        req.body["name"],
+        req.body["testID"],
+        req.body["testName"],
         req.body["description"],
         req.body["details"],
         req.body["imageLink"],
         req.body["sampleReportImage"],
-        req.body["price"],
+        req.body["testAmount"],
         req.body["faq"],
       ]
     );
@@ -591,8 +592,8 @@ app.post("/admin/uploadTest", async (req, res) => {
 });
 
 const testUpload = upload.fields([
-  { name: "testReport", maxCount: 1 },
-  { name: "testImage", maxCount: 1 },
+  { testName: "testReport", maxCount: 1 },
+  { testName: "testImage", maxCount: 1 },
 ]);
 app.post("/admin/postTest", testUpload, async (req, res) => {
   try {
@@ -612,38 +613,38 @@ app.post("/admin/postTest", testUpload, async (req, res) => {
     }
 
     const check = await client.query(
-      `SELECT * FROM "apttests" WHERE "testId" = $1`,
-      [req.body.testId]
+      `SELECT * FROM "apttests" WHERE "testID" = $1`,
+      [req.body.testID]
     );
     if (check.rows.length < 1) {
       const result = await client.query(
-        `INSERT INTO "apttests" ("testId","name","description","details","imageLink","sampleReportImage","price","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `INSERT INTO "apttests" ("testID","testName","description","details","imageLink","sampleReportImage","testAmount","isSpecial","type") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [
-          req.body.testId,
-          req.body.name,
+          req.body.testID,
+          req.body.testName,
           req.body.description,
           req.body.details,
           testImage,
           testReport,
-          req.body.testPrice,
+          req.body.testAmount,
           req.body.isSpecial,
           req.body.type,
         ]
       );
     } else {
       const result = await client.query(
-        `UPDATE "apttests" SET "testId" = $1 ,"name" = $2 ,"description"=$3,"details"=$4,"imageLink"=$5,"sampleReportImage"=$6,"price"=$7,"isSpecial"=$8,"type"=$9 WHERE "testId" = $10`,
+        `UPDATE "apttests" SET "testID" = $1 ,"testName" = $2 ,"description"=$3,"details"=$4,"imageLink"=$5,"sampleReportImage"=$6,"testAmount"=$7,"isSpecial"=$8,"type"=$9 WHERE "testID" = $10`,
         [
-          req.body.testId,
-          req.body.name,
+          req.body.testID,
+          req.body.testName,
           req.body.description,
           req.body.details,
           testImage,
           testReport,
-          req.body.testPrice,
+          req.body.testAmount,
           req.body.isSpecial,
           req.body.type,
-          req.body.testId,
+          req.body.testID,
         ]
       );
     }
@@ -687,7 +688,7 @@ app.get("/admin/checkAndGetBlogById",async (req,res)=>{
 })
 
 //Admin - Update Blog
-const blogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4}])
+const blogUpload = upload.fields([{testName:"videoFile" , maxCount:1},{testName:"images", maxCount:4}])
 app.post("/admin/postBlog",blogUpload, async (req,res)=>{
 
     try{
@@ -761,7 +762,7 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
 
 
 //Admin- Add blog
-const insertBlogUpload = upload.fields([{name:"videoFile" , maxCount:1},{name:"images", maxCount:4}])
+const insertBlogUpload = upload.fields([{testName:"videoFile" , maxCount:1},{testName:"images", maxCount:4}])
 app.post("/admin/insertBlog",insertBlogUpload, async (req,res)=>{
     try{
         let images =[]
@@ -812,13 +813,13 @@ app.post("/admin/insertBlog",insertBlogUpload, async (req,res)=>{
 app.post("/admin/uploadTest",async (req,res)=>{
     try{
     const response = await client.query(`INSERT INTO "apttests" VALUES ($1,$2,$3,$4,$5,$6)`,[
-        req.body["testId"],
-        req.body["name"],
+        req.body["testID"],
+        req.body["testName"],
         req.body["description"],
         req.body["details"],
         req.body["imageLink"],
         req.body["sampleReportImage"],
-        req.body["price"],
+        req.body["testAmount"],
         req.body["faq"],
         
     ])
@@ -933,6 +934,18 @@ app.get("/getPackages", async(req,res)=>{
   }
 })
 
+app.get("/getAllFeaturedTests",async(req,res)=>{
+  try{
+    const response = await client.query(`SELECT * FROM "apttests"  WHERE "isSpecial" = 'true'`)
+    const data = response.rows
+    res.send({code:200,data}).status(200)
+  }
+  catch(e){
+    console.log(e)
+    res.send().status(500)
+  }
+})
+
 
 
 //Slot Booking --- Section
@@ -958,8 +971,10 @@ app.post("/slotBooking",async(req,res) => {
 
 app.get("/getFlebo",async (req,res)=>{
   try{
+    // sendMail()
     const result = await client.query(`SELECT * FROM "aptutils"`)
     res.status(200).json(result.rows[0])
+    sendMail()
   }
   catch(err){
     console.log(err)
@@ -1024,7 +1039,7 @@ app.post("/postFeedback",upload.single("attachment"),async(req,res)=>{
     attachment = uploadResult.Location;
   }
   console.log("here")
-    const result = await client.query(`INSERT INTO "aptquery" VALUES ($1,$2,$3,$4,$5,$6)`,[req.body.name,req.body.email,req.body.type,req.body.contact,req.body.query,attachment])
+    const result = await client.query(`INSERT INTO "aptquery" VALUES ($1,$2,$3,$4,$5,$6)`,[req.body.testName,req.body.email,req.body.type,req.body.contact,req.body.query,attachment])
       res.send("worked").status(200)
   }catch(err){
     console.log(err)
@@ -1036,7 +1051,7 @@ app.post("/postFeedback",upload.single("attachment"),async(req,res)=>{
 app.post("/postContactus",async(req,res)=>{
   try{  
     console.log(req.body)
-    const result = await client.query(`INSERT INTO "aptcontactus" VALUES ($1,$2,$3,$4,$5)`,[req.body.name,req.body.email,req.body.contact,req.body.queryType,req.body.queryDescription])
+    const result = await client.query(`INSERT INTO "aptcontactus" VALUES ($1,$2,$3,$4,$5)`,[req.body.testName,req.body.email,req.body.contact,req.body.queryType,req.body.queryDescription])
       res.send("worked").status(200)
   }catch(err){
     console.log(err)
@@ -1059,7 +1074,6 @@ app.get("/admin/fetchFeedbacks",async(req,res)=>{
     console.log(err)
     res.send("failed").status(500)
   }
-
 })
 
 // fetch Contactus
