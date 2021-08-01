@@ -2,11 +2,12 @@ const { Client } = require("pg");
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
-const nodemailer = require("nodemailer");
 const multer = require("multer");
+const Razorpay = require("razorpay");
 const upload = multer({ dest: "uploads/" });
 const { uploadFile } = require("./s3");
 const sgMail = require('@sendgrid/mail');
+const { response } = require("express");
 
 
 const app = express();
@@ -30,7 +31,7 @@ const sendMail = async (message)=>{
 
 }
 
-
+// db client
 const client = new Client({
   user: "ayushpayasi",
   host: "apttestdb.cqgz43wq9ns0.ap-south-1.rds.amazonaws.com",
@@ -41,13 +42,64 @@ const client = new Client({
 
 client.connect();
 
-var transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "ayushpayasi@gmail.com",
-    pass: "MH34k2909",
-  },
-});
+// sms client
+const smsClient={
+  sendOTP : async ()=>{const reuslt = await axios.post("http://api.pinnacle.in/index.php/sms/json")}
+
+}
+
+
+
+
+// payment gateway client
+var razorpay = new Razorpay({
+  key_id: 'rzp_test_HfoOyFfzSafqJd',
+  key_secret: 'IW1k3b5ljRwYkJitpS7mCznl'
+})
+
+
+app.post("/makePaymentRazorpay", async (req,res)=>{
+  try{  
+    const currency = "INR"
+    const amount = req.body.amount*100
+    const response = await razorpay.orders.create({amount, currency})
+    res.send(response).status(200)
+  }catch(err){
+    console.log(err)
+    res.send(500)
+  }
+})
+
+
+app.post("/confirmGiftPayment",async(req,res)=>{
+  try{
+    const result = await client.query(`INSERT INTO "aptgifts" VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[
+    req.body.userName,
+    req.body.userEmail,
+    req.body.userContact,
+    req.body.recieverName,
+    req.body.recieverContact,
+    req.body.recieverEmail,
+    req.body.couponCode,
+    req.body.couponAmount,
+    req.body.giftedTestList
+    ]) 
+
+    res.json({
+      code:200,
+      data:"",
+    })
+
+  }catch(err){
+    console.log(err)
+    res.json({
+      code:500,
+      data:"",
+    })
+  }
+})
+
+
 
 const checks = {
   userExists: async (contact) => {
@@ -88,7 +140,7 @@ const liveHealthApiRequest = {
         "https://staging.livehealth.solutions/LHRegisterBillAPI/a6277e50-bc7d-11eb-aed7-0afba0d18fd2/",
         data
       );
-      return { code: "200", data: response };
+      return { code: "200", data: response.data };
     } catch (err) {
       return { code: "400", data: err };
     }
@@ -201,6 +253,8 @@ app.post("/updateUser", async (req, res) => {
   }
 });
 
+
+
 app.post("/createAppointment/lab", async (req, res) => {
   const localSaveBody = {
     contact: req.body["mobile"],
@@ -290,19 +344,19 @@ app.post("/check", async (req, res) => {
   }
 });
 
+
+
+
 app.post("/bookLabAppointment", async (req, res) => {
   try {
     if (await checkUser(req.body["mobile"])) {
-      1;
       const result = await liveHealthApiCall.labAppointment(req.body);
       if (result.code === "200") {
         res.code(200);
       } else {
         res.code(400);
       }
-      res.send("user Exist").status(200);
     } else {
-      // res.send("register new user").status(200)
       client.query("INSERT INTO apttestuser () VALUES ()");
     }
   } catch (e) {
@@ -313,15 +367,400 @@ app.post("/bookLabAppointment", async (req, res) => {
   }
 });
 
+
+
+//booking utilities
+
+const checkUserExist = async(data)=>{
+  const response = await client.query(`SELECT * FROM "apttestuser" WHERE contact = $1`,[data.mobile])
+  return response.rows[0]
+}
+
+const createNewUser = async(data)=>{
+  const passdate = new Date(data.dob).getFullYear()
+  const password = /^\S*/i.exec(data.fullName)[0].toLowerCase()+passdate
+  const response = await client.query(`INSERT INTO "apttestuser" ("userName","dob","email","gender","appointmentList","billList","contact","address","userPassword") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[
+    data.fullName,
+    data.dob,
+    data.email,
+    data.gender,
+    data.appointmentList,
+    data.billList,
+    data.mobile,
+    data.area,
+    password
+  ])
+  return response.rowCount === 1
+}
+
+const updateExistingUser = async(data)=>{
+  const response = await client.query(`UPDATE "apttestuser" SET "appointmentList" = $1 ,"billList" = $2 WHERE "contact" = $3`,[
+    data.appointmentList,
+    data.billList,
+    data.mobile
+  ])
+  return response.rowCount === 1
+}
+
+
+const createNewUser2 = async(data)=>{
+  const passdate = new Date(data.dob).getFullYear()
+  const password = /^\S*/i.exec(data.fullName)[0].toLowerCase()+passdate
+  const response = await client.query(`INSERT INTO "apttestuser" ("userName","dob","email","gender","appointmentList","billList","contact","address","userPassword","appointmentList","billList") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,[
+    data.fullName,
+    data.dob,
+    data.email,
+    data.gender,
+    data.appointmentList,
+    data.billList,
+    data.mobile,
+    data.area,
+    password,[],[]
+  ])
+  return response.rows[0]
+}
+
+const updateExistingUser2 = async(data)=>{
+  const response = await client.query(`UPDATE "apttestuser" SET "appointmentList" = $1 ,"billList" = $2 WHERE "contact" = $3 returning *`,[
+    data.appointmentList,
+    data.billList,
+    data.mobile
+  ])
+  return response.rows[0]
+}
+
+
+
+const findUserByFamilyId = async (data)=>{
+  const result = await client.query(`SELECT * FROM "apttestuser" WHERE "familyId" = $1`,[data.familyId])
+  return result.rows[0]
+}
+
+
+
+const isFamilyMemberExist = async(data)=>{
+  const result = await client.query(`SELECT * FROM "memberslist" WHERE "familyId" = $1 AND "userName" = $2`,[
+    data.familyId,
+    data.fullName
+  ])
+  return result.rowCount === 1
+
+}
+
+const createFamilyMember = async(data)=>{
+  const result = await client.query(`INSERT INTO "memberslist" ("userName" , "dob" , "address" , "gender" , "familyId") VALUES ($1 ,$2 ,$3 ,$4, $5)`,[
+    data.fullName,
+    data.dob,
+    data.area,
+    data.gender,
+    data.familyId
+  ])
+
+  return result.rowCount == 1
+
+}
+
+const updateFamilyMember = async(data)=>{
+  const result = await client.query(`UPDATE "memberslist" SET "address"=$1 ,"dob"=$2 WHERE "name" = $3 AND "familyId" = $4`,[
+    data.area,
+    data.dob,
+    data.fullName.trim(),
+    data.familyId
+  ])
+  return result.rowCount == 1
+}
+
+
+
+
+// bookings APIs
+
+
+app.post("/saveBeforeBooking",async(req,res)=>{
+  try{
+    const userData = await checkUserExist(req.body)
+    if(userData !== undefined) //user exist
+    {
+      let billList = userData.billList
+      let appointmentList = userData.appointmentList
+      const data = {
+        appointmentList,
+        billList,
+        mobile:req.body.mobile
+      }
+
+      const result = await updateExistingUser2(data)
+        if(result !== undefined){res.json({code:"200",data:result})}
+        else{res.json({code:"500"})}
+    }
+    else //user not exist
+    {
+      const data = {
+        "mobile": req.body.mobile,
+        "email": req.body.email,
+        "fullName": req.body.fullName,
+        "gender": req.body.gender,
+        "area": req.body.area,
+        "dob": req.body.dob,
+        "billList":[],
+        "appointmentList":[]
+      }
+
+      const result = await createNewUser2(data)
+      if(result !== undefined){res.json({code:"200",data:result})}
+      else{res.json({code:"500"})}
+    }
+
+
+  }catch(err){console.log(err);res.json({message:"internal server error!",code:"500"})}
+})
+
+
+app.post("/bookAppointment/lab",async(req,res)=>{
+    try{
+      console.log(req.body)
+    let newBillId = ""
+    let newAppointmentId = "" 
+    const liveHealthResponse = await liveHealthApiRequest.labAppointment(req.body)
+    if(liveHealthResponse.code === "200"){
+      newBillId = liveHealthResponse.data.billId
+      newAppointmentId = liveHealthResponse.data.appointmentId
+    }
+    else{
+      console.log("________live health api error____________")
+      console.error(liveHealthResponse.data)
+      res.json({code:500,message:"error in livehealth api!"})
+    }
+
+  if(req.body.isMember){
+    if(await isFamilyMemberExist(req.body)){
+      await updateFamilyMember(req.body)
+    }
+    else{
+      await createFamilyMember(req.body)
+    }
+    const userUpdateData = await checkUserExist(req.body)
+    if(userUpdateData !== undefined){
+      let appointmentList = userUpdateData.appointmentList
+      let billList = userUpdateData.billList
+      appointmentList.push()
+      billList.push()
+
+      let data = {
+        appointmentList,
+        billList,
+        mobile:userUpdateData.mobile
+      }
+      if(updateExistingUser(data)){
+        if(await setSlot(req.body)){
+        res.json({code:200,message:"booking done with member modification"})}
+      }
+      else{
+        res.json({code:500,message:"Internal Server Error!"})
+      }
+    }
+    else{
+      res.json({code:500,message:"Internal Server Error!"})
+    }
+  }
+  else{
+    
+    // console.log(req.body)
+    const userData = await checkUserExist(req.body)
+    if(userData !== undefined) //user exist
+    {
+      let billList = userData.billList
+      let appointmentList = userData.appointmentList
+      appointmentList.push(newAppointmentId)
+      billList.push(newBillId)
+      const data = {
+        appointmentList,
+        billList,
+        mobile:req.body.mobile
+      }
+
+      if(await updateExistingUser(data)){
+        if(await setSlot(req.body)){
+       res.json({code:200,message:"existing user updated!"})}
+      }
+      else{
+        res.json({code:400,message:"cant update existing user!"}) 
+      }
+    } 
+    else //user not exist
+    {
+      const data = {
+        "mobile": req.body.mobile,
+        "email": req.body.email,
+        "fullName": req.body.fullName,
+        "gender": req.body.gender,
+        "area": req.body.area,
+        "dob": req.body.dob,
+        "billList":[newBillId],
+        "appointmentList":[newAppointmentId]
+      }
+
+      if(await createNewUser(data)){
+        if(await setSlot(req.body)){
+        res.json({code:200,message:"user created!"})}
+      }
+      else{
+        res.json({code:500,message:"cant create new user!"})
+      }
+    }
+  }
+  
+  }catch(err){console.log(err);res.json({code:500,message:"Internal Server Error!"})}
+})
+
+
+app.post("/bookAppointment/home",async(req,res)=>{
+  try{
+    console.log(req.body)
+    let newBillId = ""
+    let newAppointmentId = "" 
+    const liveHealthResponse = await liveHealthApiRequest.homeAppointment(req.body)
+    if(liveHealthResponse.code === "200"){
+      newBillId = liveHealthResponse.data.billId
+      newAppointmentId = liveHealthResponse.data.appointmentId
+    }
+    else{
+      console.log("________live health api error____________")
+      console.error(liveHealthResponse.data)
+      res.json({code:500,message:"error in livehealth api!"})
+    }
+
+  if(req.body.isMember){
+    if(await isFamilyMemberExist(req.body)){
+      await updateFamilyMember(req.body)
+    }
+    else{
+      await createFamilyMember(req.body)
+    }
+    const userUpdateData = await checkUserExist(req.body)
+    if(userUpdateData !== undefined){
+      let appointmentList = userUpdateData.appointmentList
+      let billList = userUpdateData.billList
+      appointmentList.push()
+      billList.push()
+
+      let data = {
+        appointmentList,
+        billList,
+        mobile:userUpdateData.mobile
+      }
+      if(updateExistingUser(data)){
+        if(await setSlot(req.body)){
+          res.json({code:200,message:"booking done with member modification"})}
+      }
+      else{
+        res.json({code:500,message:"Internal Server Error!"})
+      }
+    }
+    else{
+      res.json({code:500,message:"Internal Server Error!"})
+    }
+  }
+  else{
+    
+    // console.log(req.body)
+    const userData = await checkUserExist(req.body)
+    if(userData !== undefined) //user exist
+    {
+      let billList = userData.billList
+      let appointmentList = userData.appointmentList
+      appointmentList.push(newAppointmentId)
+      billList.push(newBillId)
+      const data = {
+        appointmentList,
+        billList,
+        mobile:req.body.mobile
+      }
+
+      if(await updateExistingUser(data)){
+        if(await setSlot(req.body)){
+          res.json({code:200,message:"existing user updated!"})}
+      }
+      else{
+        res.json({code:400,message:"cant update existing user!"}) 
+      }
+    } 
+    else //user not exist
+    {
+      const data = {
+        "mobile": req.body.mobile,
+        "email": req.body.email,
+        "fullName": req.body.fullName,
+        "gender": req.body.gender,
+        "area": req.body.area,
+        "dob": req.body.dob,
+        "billList":[newBillId],
+        "appointmentList":[newAppointmentId]
+      }
+
+      if(await createNewUser(data)){
+        if(await setSlot(req.body)){
+          res.json({code:200,message:"user created!"})}
+      }
+      else{
+        res.json({code:500,message:"cant create new user!"})
+      }
+    }
+  }
+  
+  }catch(err){console.log(err);res.json({code:500,message:"Internal Server Error!"})}
+})
+
+
+
 app.post("/login", async (req, res) => {
   try {
-    const result = await client.query("select * from apttestuser");
-    res.status(200).send("success");
+    const result = await client.query(`select "userName","dob","email","gender","address","familyId","contact" from "apttestuser" WHERE "contact"=$1 AND "userPassword" =$2`,[
+      req.body.contact,req.body.password]);
+    if(result.rowCount >0){
+      res.json({code:200,data:result.rows[0]})
+    } 
+    else{
+      res.json({code:400,data:null})
+    }
   } catch (e) {
     console.log(e);
-    res.status(400).send("failed");
+    res.json({code:500,data:null})
   }
 });
+
+app.post("/register",async (req,res)=>{
+  try{
+    if( (await checkUserExist(req.body)) === undefined){
+      const result = await createNewUser2(req.body) 
+      if(result !== undefined){
+        res.json({code:200,data:result})
+      }
+      else{
+        res.json({code:400,data:null})
+      }
+    }
+    else{
+      res.json({code:202,data:"user Already exists!"})
+    }
+  }catch(err){
+    console.log(err)
+    res.json({code:500,data:null})
+  }
+})
+
+app.post("/getMemberDetails",async(req,res)=>{
+  try{
+    const result = await client.query(`SELECT * FROM "memberslist" WHERE "familyId" = $1`,[req.body.familyId])
+    if(result.rowCount>0){
+    res.json({code:200,data:result.rows})}
+    else{
+      res.json({code:202,data:result.rows})
+    }
+  }catch(err)
+  {console.log(err);res.json({code:500,data:err})}
+})
+
 
 app.post("/storeBill", (req, res) => {
   res.json({ code: 200 });
@@ -761,6 +1200,14 @@ app.post("/admin/postBlog",blogUpload, async (req,res)=>{
 })
 
 
+app.post("quickLogin",async(req,res)=>{
+  try{
+    const result = await client.query(`SELECT * FROM "apttestuser" WHERE "contact" = $1`,[req.body.contact])
+    res.json({code:200,data:result.rows[0]})
+  }catch(err){console.log(err)
+  res.json({code:500,data:err})}
+})
+
 //Admin- Add blog
 const insertBlogUpload = upload.fields([{testName:"videoFile" , maxCount:1},{testName:"images", maxCount:4}])
 app.post("/admin/insertBlog",insertBlogUpload, async (req,res)=>{
@@ -845,7 +1292,6 @@ app.post("/admin/insertBlogContent", async (req,res) => {
     catch(err) {
         console.log(err)
         res.send("Internal Server Error").status(500)
-        console.log("")
     }
 })
 
@@ -874,27 +1320,22 @@ app.get("/allblogs", async(req, res) => {
 })
 
 //For Coupons
-app.get("/coupon", async (req,res)=>{
+// modification required
+app.post("/giftCoupon", async (req,res)=>{
     try{
-        console.log(req.query.couponCode)
-        const couponCode = parseInt(req.query.couponCode);
-        const verifyCoupon =  await client.query(`SELECT * FROM "aptcoupons" WHERE "couponCode" = $1`,[couponCode])
+        const verifyCoupon =  await client.query(`SELECT "giftedTestList" ,"couponAmount" , "couponCode" FROM "aptgifts" WHERE "couponCode" = $1 AND "isValid" = 'true' `,[req.body.coupon])
+        console.log(verifyCoupon)
         if(verifyCoupon.rows.length > 0) {
-            const {couponPrice, giftedTests} = verifyCoupon.rows[0]
-
-            res.status(200).json({
-                message:"Valid Coupon Code",
-                data : {
-                    couponPrice,
-                    giftedTests,
-                    couponCode,
-                }
+            res.json({
+                code:200,
+                data : verifyCoupon.rows[0]
             })
         }
         else if(verifyCoupon.rows.length === 0){
             res.status(400).json({
+                code:400,
                 message:"Invalid Coupon Code",
-                data : 0
+                data : null
             })
         }
         }
@@ -907,6 +1348,52 @@ app.get("/coupon", async (req,res)=>{
     }
 }
 )
+
+
+// apply coupon
+app.get("/applyCoupon", async (req,res)=>{
+  try{
+      console.log(req.query.coupon)
+      const verifyCoupon =  await client.query(`SELECT * FROM "aptcoupons" WHERE "couponCode" = $1`,[req.query.coupon])
+      if(verifyCoupon.rows.length > 0) {
+        res.json({
+          discount:parseInt(verifyCoupon.rows[0].couponPrice),
+          code:200
+        })
+      }else{
+        res.json({
+          code:400
+            })
+      }
+    }catch(err){
+      console.log(err)
+      res.json({
+        code:500
+          })
+}
+})
+
+// getAllCoupons
+app.get("/getAllCoupons",async(req,res)=>{
+  try{
+    const response = await client.query(`SELECT * FROM "aptcoupons"`)
+    res.send(response.rows).status(200)
+  }catch(err){
+    console.log(err)
+    res.status(500)
+  }
+})
+
+// addCoupons
+app.post("/uploadCoupon",async(req,res)=>{
+  try{
+    const result = await client.query(`INSERT INTO "aptcoupons" VALUES ($1,$2)`,[req.body.couponCode,req.body.couponPrice])
+    res.send("ok").sendStatus(200)
+  }catch(err){
+    console.log(err)
+    res.send("failed").sendStatus(500)
+  }
+})
 
 // index Page
 
@@ -948,10 +1435,16 @@ app.get("/getAllFeaturedTests",async(req,res)=>{
 
 
 
+
+app.post("/testAPI",async(req,res)=>{
+  await setSlot(req.body)
+  res.send("ok")
+})
+
 //Slot Booking --- Section
+// input format mm-dd-yyyy
 
 app.post("/slotBooking",async(req,res) => {
-  console.log(req.body.slot)
   try{
     const result = await client.query(`SELECT * FROM "aptbookings" WHERE "slot"::DATE = $1`,[req.body.slot])
     var decryptSlot = {7:"slot1",8:"slot2",9:"slot3",10:"slot4",11:"slot5",12:"slot6",13:"slot7",14:"slot8",15:"slot9",16:"slot10",17:"slot11",18:"slot12",19:"slot13",20:"slot14",21:"slot15"}
@@ -959,13 +1452,27 @@ app.post("/slotBooking",async(req,res) => {
     for (var a of result.rows){
       slots[decryptSlot[new Date(a.slot).getUTCHours()]]++
     }
-    res.json(slots).sendStatus(200)
+    res.json(slots)
   }catch(err){
     console.log(err)
     res.sendStatus(500)
   }
 })
 
+// set slot
+
+const setSlot = async (data)=>{
+  console.log(data)
+  try{
+    const result = await client.query(`INSERT INTO "aptbookings" VALUES ($1,$2)`,[data.mobile,data.slotTime])
+    console.log(result)
+    return true
+
+  }catch(err){
+    console.log(err)
+    return false
+  }
+}
 
 // manage flebo
 
@@ -974,13 +1481,13 @@ app.get("/getFlebo",async (req,res)=>{
     // sendMail()
     const result = await client.query(`SELECT * FROM "aptutils"`)
     res.status(200).json(result.rows[0])
-    sendMail()
   }
   catch(err){
     console.log(err)
     res.status(500)
   }
 })
+
 
 app.post("/setFlebo",async (req,res)=>{
   try{
@@ -1092,6 +1599,17 @@ app.get("/admin/fetchContactus",async(req,res)=>{
     res.send("failed").status(500)
   }
 
+})
+
+app.post("/requestCallback", async (req,res)=>{
+  try{
+    console.log(req.body)
+    const response = await client.query(`INSERT INTO "callbackrequests" VALUES ($1 , $2)`,[req.body.name,req.body.contactNumber])
+    res.json({code:200})
+  }catch(err){
+    console.log(err)
+    res.json({code:500})
+  }
 })
 
 
