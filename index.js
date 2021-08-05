@@ -7,7 +7,7 @@ const Razorpay = require("razorpay");
 const upload = multer({ dest: "uploads/" });
 const { uploadFile } = require("./s3");
 const sgMail = require('@sendgrid/mail');
-const { response } = require("express");
+
 
 
 const app = express();
@@ -18,13 +18,13 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
 
 // mail client
-const sendMail = async (message)=>{
+const sendMail = async (to,text,template)=>{
   const msg = {
-    to: 'anchitkumar100@gmail.com', // Change to your recipient
+    to, // Change to your recipient
     from: 'info@aptdiagnostics.com', // Change to your verified sender
     subject: 'Sending with SendGrid is Fun',
-    text: 'and easy to do anywhere, even with Node.js',
-    html: '<strong>and easy to do anywhere, even with Node.js</strong>',
+    text,
+    html:template,
   }
 
   sgMail.send(msg).then(() => {console.log('Email sent')}).catch((error) => {console.error(error)})
@@ -33,10 +33,10 @@ const sendMail = async (message)=>{
 
 // db client
 const client = new Client({
-  user: "ayushpayasi",
-  host: "apttestdb.cqgz43wq9ns0.ap-south-1.rds.amazonaws.com",
-  database: "postgres",
-  password: "Ayush123",
+  user: process.env.DB_CLIENT_USER,
+  host: process.env.DB_CLIENT_HOST,
+  database: process.env.DB_CLIENT_DATABASE,
+  password: process.env.DB_CLIENT_PASSWORD,
   port: 5432,
 });
 
@@ -53,8 +53,8 @@ const smsClient={
 
 // payment gateway client
 var razorpay = new Razorpay({
-  key_id: 'rzp_test_HfoOyFfzSafqJd',
-  key_secret: 'IW1k3b5ljRwYkJitpS7mCznl'
+  key_id: process.env.RAZORPAY_KEYID,
+  key_secret: process.env.RAZORPAY_KEYSECRET
 })
 
 
@@ -372,7 +372,7 @@ app.post("/bookLabAppointment", async (req, res) => {
 //booking utilities
 
 const checkUserExist = async(data)=>{
-  const response = await client.query(`SELECT * FROM "apttestuser" WHERE contact = $1`,[data.mobile])
+  const response = await client.query(`SELECT * FROM "apttestuser" WHERE "contact" = $1`,[data.mobile])
   return response.rows[0]
 }
 
@@ -394,6 +394,7 @@ const createNewUser = async(data)=>{
 }
 
 const updateExistingUser = async(data)=>{
+  console.log(data)
   const response = await client.query(`UPDATE "apttestuser" SET "appointmentList" = $1 ,"billList" = $2 WHERE "contact" = $3`,[
     data.appointmentList,
     data.billList,
@@ -461,7 +462,7 @@ const createFamilyMember = async(data)=>{
 }
 
 const updateFamilyMember = async(data)=>{
-  const result = await client.query(`UPDATE "memberslist" SET "address"=$1 ,"dob"=$2 WHERE "name" = $3 AND "familyId" = $4`,[
+  const result = await client.query(`UPDATE "memberslist" SET "address"=$1 ,"dob"=$2 WHERE "userName" = $3 AND "familyId" = $4`,[
     data.area,
     data.dob,
     data.fullName.trim(),
@@ -543,8 +544,8 @@ app.post("/bookAppointment/lab",async(req,res)=>{
     if(userUpdateData !== undefined){
       let appointmentList = userUpdateData.appointmentList
       let billList = userUpdateData.billList
-      appointmentList.push()
-      billList.push()
+      appointmentList.push(newAppointmentId)
+      billList.push(newBillId)
 
       let data = {
         appointmentList,
@@ -641,8 +642,9 @@ app.post("/bookAppointment/home",async(req,res)=>{
     if(userUpdateData !== undefined){
       let appointmentList = userUpdateData.appointmentList
       let billList = userUpdateData.billList
-      appointmentList.push()
-      billList.push()
+      appointmentList.push(newAppointmentId)
+      billList.push(newBillId)
+      console.log(billList,appointmentList)
 
       let data = {
         appointmentList,
