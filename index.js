@@ -764,10 +764,7 @@ app.post("/getMemberDetails",async(req,res)=>{
 })
 
 
-app.post("/storeBill", (req, res) => {
-  res.json({ code: 200 });
-});
-
+// DO NOT CHANGE
 app.post("/storeReport", async (req, res) => {
   try {
     const result = await client.query(
@@ -793,6 +790,7 @@ app.post("/storeReport", async (req, res) => {
     res.status(400).send("failed");
   }
 });
+
 
 app.get("/getReport", async (req, res) => {
   try {
